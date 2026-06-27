@@ -1,0 +1,193 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sulala &middot; Economy Console</title>
+<style>
+:root{--red:#C8102E;--ink:#1A1A2E;--bg:#f5f6f8;--panel:#fff;--border:#e3e5ea;--mut:#6b7280;--ok:#0a7d33;--mono:ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--ink);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px}
+header b{color:#fff}header .dot{width:10px;height:10px;border-radius:50%;background:var(--red)}
+header .sp{flex:1}header small{color:#aeb2bd}
+button{font:inherit;cursor:pointer;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px}
+button.p{background:var(--red);color:#fff;border-color:var(--red)}button.g{background:var(--ink);color:#fff;border-color:var(--ink)}
+button:disabled{opacity:.5;cursor:default}
+nav{display:flex;gap:6px;flex-wrap:wrap;padding:12px 18px 0}
+nav button.tab{border-radius:999px;padding:6px 14px}nav button.tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+main{padding:18px;max-width:1100px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}
+.kpi .v{font-size:24px;font-weight:700;font-family:var(--mono)}.kpi .l{color:var(--mut);font-size:12px;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border)}
+th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+td.n,th.n{text-align:right;font-family:var(--mono)}
+input,select{font:inherit;padding:7px 9px;border:1px solid var(--border);border-radius:8px;width:100%}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;align-items:end}
+.form label{font-size:12px;color:var(--mut);display:block;margin-bottom:3px}
+h2{font-size:16px;margin:0 0 12px}h3{font-size:13px;color:var(--mut);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.04em}
+.row-edit{width:90px}.mut{color:var(--mut)}.right{display:flex;justify-content:flex-end;gap:8px}
+#login{max-width:380px;margin:10vh auto;padding:24px}#login .card{padding:22px}
+#login h1{font-size:18px;margin:0 0 4px}#login p{color:var(--mut);margin:0 0 16px;font-size:13px}
+#login input{margin-bottom:10px}#loginMsg{color:var(--red);font-size:13px;min-height:18px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;opacity:0;transition:.25s;font-size:14px;z-index:9}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}.toast.err{background:var(--red)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:#eef0f3}.pill.on{background:#dff3e4;color:var(--ok)}.pill.off{background:#fde7ea;color:var(--red)}
+.hint{font-size:12px;color:var(--mut);margin-top:6px}
+</style></head><body>
+
+<div id="login">
+  <div class="card">
+    <h1>Sulala &middot; Economy Console</h1>
+    <p>Sign in as a platform admin.</p>
+    <input id="email" type="email" placeholder="admin email" autocomplete="username">
+    <input id="pw" type="password" placeholder="password" autocomplete="current-password">
+    <button class="p" id="btnLogin" style="width:100%">Sign in</button>
+    <div style="margin-top:10px"><button id="btnMagic" style="width:100%">Email me a magic link</button></div>
+    <div id="loginMsg" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header><span class="dot"></span><b>Sulala</b> <small>Economy Console</small><span class="sp"></span><small id="who"></small> <button id="btnOut">Sign out</button></header>
+  <nav id="nav"></nav>
+  <main>
+    <section id="tab-overview"></section>
+    <section id="tab-margin" hidden></section>
+    <section id="tab-packs" hidden></section>
+    <section id="tab-vgoods" hidden></section>
+    <section id="tab-perks" hidden></section>
+    <section id="tab-settings" hidden></section>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+var sb = createClient("https://kjbvvfkzejnjvheodbmp.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqYnZ2Zmt6ZWpuanZoZW9kYm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTIxMDYsImV4cCI6MjA5NzQ4ODEwNn0.qmEB5KKuSWpOgp21_QaetnnBA6Zpk-bLJjImrFYrylc");
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ if(s===null||s===undefined) return ""; return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function money(n){ n=Number(n||0); return n.toLocaleString(undefined,{maximumFractionDigits:2}); }
+function toast(m, ok){ var t=$("toast"); t.textContent=m; t.className=(ok===false?"toast err show":"toast show"); setTimeout(function(){ t.className="toast"; }, 3200); }
+async function rpc(name,args){ var r=await sb.rpc(name,args||{}); if(r.error) throw r.error; return r.data; }
+var TABS=[["overview","Overview"],["margin","Plans & Margin"],["packs","Coin Packs"],["vgoods","Virtual Goods"],["perks","Sponsors & Perks"],["settings","Settings"]];
+var SPONSORS=[], PACKS=[], VGOODS=[], PERKS=[];
+
+function buildNav(){ var h=""; for(var i=0;i<TABS.length;i++){ h+='<button class="tab" data-t="'+TABS[i][0]+'">'+TABS[i][1]+'</button>'; } $("nav").innerHTML=h;
+  var bs=$("nav").querySelectorAll("button"); for(var j=0;j<bs.length;j++){ bs[j].addEventListener("click",function(){ show(this.getAttribute("data-t")); }); } }
+function show(t){ for(var i=0;i<TABS.length;i++){ var sec=$("tab-"+TABS[i][0]); if(sec) sec.hidden=(TABS[i][0]!==t); }
+  var bs=$("nav").querySelectorAll("button"); for(var j=0;j<bs.length;j++){ bs[j].className="tab"+(bs[j].getAttribute("data-t")===t?" on":""); }
+  if(t==="overview") loadOverview(); else if(t==="margin") loadMargin(); else if(t==="packs") loadPacks(); else if(t==="vgoods") loadVgoods(); else if(t==="perks") loadPerks(); else if(t==="settings") loadSettings(); }
+
+/* ---------- auth ---------- */
+async function boot(){ var s=await sb.auth.getSession(); if(s.data.session){ enter(); } else { $("login").hidden=false; $("app").hidden=true; } }
+async function enter(){ try{ var ov=await rpc("admin_economy_overview"); var u=await sb.auth.getUser(); $("who").textContent=u.data.user?u.data.user.email:""; $("login").hidden=true; $("app").hidden=false; buildNav(); renderOverview(ov); show("overview"); }
+  catch(e){ $("loginMsg").textContent="This account is not an economy admin."; try{ await sb.auth.signOut(); }catch(_e){} } }
+$("btnLogin").addEventListener("click", async function(){ $("loginMsg").textContent="Signing in..."; var r=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("pw").value}); if(r.error){ $("loginMsg").textContent=r.error.message; return; } enter(); });
+$("btnMagic").addEventListener("click", async function(){ var em=$("email").value.trim(); if(!em){ $("loginMsg").textContent="Enter your email first."; return; } var r=await sb.auth.signInWithOtp({email:em,options:{emailRedirectTo:location.href}}); $("loginMsg").textContent=r.error?r.error.message:("Magic link sent to "+em+"."); });
+$("btnOut").addEventListener("click", async function(){ await sb.auth.signOut(); location.reload(); });
+
+/* ---------- overview ---------- */
+async function loadOverview(){ try{ renderOverview(await rpc("admin_economy_overview")); }catch(e){ toast(e.message||e,false); } }
+function kpi(v,l){ return '<div class="kpi"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>'; }
+function renderOverview(o){ o=o||{}; var ver=o.verification||{}, si=o.sila||{}, pk=o.perks||{}, mg=o.margin||{};
+  var h='<h2>Overview</h2><div class="grid">';
+  h+=kpi("AED "+money(o.revenue_aed),"Revenue (paid)");
+  h+=kpi("AED "+money(o.pending_aed),"Pending");
+  h+=kpi(money(o.coins_outstanding),"Coins outstanding");
+  h+=kpi("AED "+money(o.coin_liability_aed),"Coin liability");
+  h+=kpi(money(o.wallets),"Wallets");
+  h+=kpi("1 AED = "+money(o.coin_rate)+" coins","Coin rate");
+  h+='</div><h3>Verification tiers</h3><div class="grid">';
+  h+=kpi(money(ver.ultimate),"Ultimate")+kpi(money(ver.platinum),"Platinum")+kpi(money(ver.silver),"Silver")+kpi(money(ver.none),"None");
+  h+='</div><h3>SILA introducer bridge</h3><div class="grid">';
+  h+=kpi(money(si.active),"Active attributions")+kpi(money(si.payments_credited),"Payments credited")+kpi("AED "+money(si.gross_credited_aed),"Gross credited")+kpi(money(si.expired),"Expired");
+  h+='</div><h3>Perks</h3><div class="grid">';
+  h+=kpi(money(pk.sponsors),"Sponsors")+kpi(money(pk.perks),"Perks")+kpi(money(pk.claims),"Claims");
+  h+='</div><h3>Margin config</h3><div class="grid">';
+  h+=kpi((mg.min_pct||"")+"%","Min margin")+kpi((mg.target_pct||"")+"%","Target margin")+kpi((mg.payout_reserve_pct||"")+"%","Payout reserve")+kpi((mg.sila_window_days||"")+"d","SILA window");
+  h+='</div>';
+  $("tab-overview").innerHTML='<div class="card">'+h+'</div>'; }
+
+/* ---------- margin / plan cost + create offering ---------- */
+async function loadMargin(){ try{ var rows=await rpc("admin_margin_table"); renderMargin(rows||[]); }catch(e){ toast(e.message||e,false); } }
+function renderMargin(rows){ var h='<h2>Plans & Margin</h2><p class="mut">Set the fulfilment cost for each plan. The margin gate floors discounted prices so net margin never drops below the minimum. Digital plans = cost 0.</p>';
+  h+='<table><tr><th>Plan</th><th class="n">Base</th><th class="n">Cost (AED)</th><th class="n">Suggested 50%</th><th class="n">Floor 30%</th><th class="n">T1</th><th class="n">T2</th><th class="n">T3</th><th class="n">T4</th><th></th></tr>';
+  for(var i=0;i<rows.length;i++){ var r=rows[i]; h+='<tr><td>'+esc(r.label)+'<div class="mut" style="font-size:11px">'+esc(r.code)+'</div></td>'+
+    '<td class="n">'+money(r.base_aed)+'</td>'+
+    '<td class="n"><input class="row-edit" style="text-align:right" id="cost_'+esc(r.code)+'" value="'+(r.cost_aed==null?0:r.cost_aed)+'"></td>'+
+    '<td class="n">'+money(r.suggested_50)+'</td><td class="n">'+money(r.floor_30)+'</td>'+
+    '<td class="n">'+money(r.price_t1)+'</td><td class="n">'+money(r.price_t2)+'</td><td class="n">'+money(r.price_t3)+'</td><td class="n">'+money(r.price_t4)+'</td>'+
+    '<td><button data-code="'+esc(r.code)+'" class="saveCost">Save</button></td></tr>'; }
+  h+='</table>';
+  h+='<h3>Create / edit offering (plan)</h3><div class="form">'+
+    fld("pl_code","code (unique)")+fld("pl_label","label (shown to users)")+fld("pl_amount","price AED","number")+
+    '<div><label>kind</label><input id="pl_kind" placeholder="plan"></div>'+
+    fld("pl_months","months (1 / 6 / 12)","number")+fld("pl_fcap","founding cap (0=off)","number")+selActive("pl_active")+
+    '<div><label>founding open</label><select id="pl_fopen"><option value="false">no</option><option value="true">yes</option></select></div>'+
+    '<div><button class="p" id="savePlan">Save offering</button></div></div>'+
+    '<div class="hint">Creates or updates a plan in the catalog (existing code = edit). Then set its cost in the table above to arm the margin gate.</div>';
+  $("tab-margin").innerHTML='<div class="card">'+h+'</div>';
+  var bs=$("tab-margin").querySelectorAll(".saveCost"); for(var j=0;j<bs.length;j++){ bs[j].addEventListener("click", async function(){ var code=this.getAttribute("data-code"); var v=Number($("cost_"+code).value||0); try{ await rpc("admin_set_plan_cost",{p_code:code,p_cost_aed:v}); toast("Saved "+code); loadMargin(); }catch(e){ toast(e.message||e,false); } }); }
+  $("savePlan").addEventListener("click", async function(){ if(!val("pl_code")||!val("pl_label")){ toast("code and label required",false); return; } try{ await rpc("admin_catalog_upsert",{p_code:val("pl_code"),p_label:val("pl_label"),p_amount_aed:num("pl_amount"),p_kind:val("pl_kind")||"plan",p_months:num("pl_months")||12,p_active:val("pl_active")==="true",p_founding_open:val("pl_fopen")==="true",p_founding_cap:num("pl_fcap")}); toast("Offering saved"); loadMargin(); }catch(e){ toast(e.message||e,false); } }); }
+
+/* ---------- coin packs ---------- */
+async function loadPacks(){ try{ renderPacks(await rpc("admin_coinpack_list")||[]); }catch(e){ toast(e.message||e,false); } }
+function renderPacks(rows){ PACKS=rows||[]; var h='<h2>Coin Packs</h2><table><tr><th>Code</th><th>Name</th><th class="n">Coins</th><th class="n">Bonus</th><th class="n">Price AED</th><th class="n">Cost AED</th><th>Active</th><th></th></tr>';
+  for(var i=0;i<PACKS.length;i++){ var r=PACKS[i]; h+='<tr><td class="mut">'+esc(r.code)+'</td><td>'+esc(r.name)+'</td><td class="n">'+money(r.coins)+'</td><td class="n">'+money(r.bonus_coins)+'</td><td class="n">'+money(r.base_aed)+'</td><td class="n">'+money(r.cost_aed)+'</td><td>'+pill(r.active)+'</td><td><button class="editPack" data-i="'+i+'">Edit</button></td></tr>'; }
+  h+='</table><h3>Add / edit pack</h3><div class="form">'+
+    fld("pk_code","code")+fld("pk_name","name")+fld("pk_coins","coins","number")+fld("pk_bonus","bonus","number")+fld("pk_base","price AED","number")+fld("pk_cost","cost AED","number")+fld("pk_sort","sort","number")+selActive("pk_active")+
+    '<div><button class="p" id="savePack">Save pack</button></div></div>';
+  $("tab-packs").innerHTML='<div class="card">'+h+'</div>';
+  $("savePack").addEventListener("click", async function(){ try{ await rpc("admin_coinpack_upsert",{p_code:val("pk_code"),p_name:val("pk_name"),p_coins:num("pk_coins"),p_bonus:num("pk_bonus"),p_base_aed:num("pk_base"),p_cost_aed:num("pk_cost"),p_active:val("pk_active")==="true",p_sort:num("pk_sort")}); toast("Pack saved"); loadPacks(); }catch(e){ toast(e.message||e,false); } });
+  var bs=$("tab-packs").querySelectorAll(".editPack"); for(var j=0;j<bs.length;j++){ bs[j].addEventListener("click",function(){ var r=PACKS[+this.getAttribute("data-i")]; set("pk_code",r.code);set("pk_name",r.name);set("pk_coins",r.coins);set("pk_bonus",r.bonus_coins);set("pk_base",r.base_aed);set("pk_cost",r.cost_aed);set("pk_sort",r.sort);set("pk_active",String(r.active)); }); } }
+
+/* ---------- virtual goods ---------- */
+async function loadVgoods(){ try{ renderVgoods(await rpc("admin_vgood_list")||[]); }catch(e){ toast(e.message||e,false); } }
+function renderVgoods(rows){ VGOODS=rows||[]; var h='<h2>Virtual Goods</h2><table><tr><th>Code</th><th>Name</th><th>Kind</th><th>Platform</th><th class="n">Coin price</th><th class="n">Cost AED</th><th>Active</th><th></th></tr>';
+  for(var i=0;i<VGOODS.length;i++){ var r=VGOODS[i]; h+='<tr><td class="mut">'+esc(r.code)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.kind)+'</td><td>'+esc(r.platform)+'</td><td class="n">'+money(r.coin_price)+'</td><td class="n">'+money(r.cost_aed)+'</td><td>'+pill(r.active)+'</td><td><button class="editVg" data-i="'+i+'">Edit</button></td></tr>'; }
+  h+='</table><h3>Add / edit good</h3><div class="form">'+
+    fld("vg_code","code")+fld("vg_name","name")+fld("vg_kind","kind")+fld("vg_platform","platform")+fld("vg_price","coin price","number")+fld("vg_cost","cost AED","number")+fld("vg_sort","sort","number")+selActive("vg_active")+
+    '<div><button class="p" id="saveVg">Save good</button></div></div><div class="hint">Coin price must clear the margin floor if cost &gt; 0.</div>';
+  $("tab-vgoods").innerHTML='<div class="card">'+h+'</div>';
+  $("saveVg").addEventListener("click", async function(){ try{ await rpc("admin_vgood_upsert",{p_code:val("vg_code"),p_name:val("vg_name"),p_kind:val("vg_kind"),p_platform:val("vg_platform"),p_coin_price:num("vg_price"),p_cost_aed:num("vg_cost"),p_active:val("vg_active")==="true",p_sort:num("vg_sort")}); toast("Good saved"); loadVgoods(); }catch(e){ toast(e.message||e,false); } });
+  var bs=$("tab-vgoods").querySelectorAll(".editVg"); for(var j=0;j<bs.length;j++){ bs[j].addEventListener("click",function(){ var r=VGOODS[+this.getAttribute("data-i")]; set("vg_code",r.code);set("vg_name",r.name);set("vg_kind",r.kind);set("vg_platform",r.platform);set("vg_price",r.coin_price);set("vg_cost",r.cost_aed);set("vg_sort",r.sort);set("vg_active",String(r.active)); }); } }
+
+/* ---------- sponsors & perks ---------- */
+async function loadPerks(){ try{ SPONSORS=await rpc("admin_sponsor_list")||[]; PERKS=await rpc("admin_perks_list")||[]; renderPerks(); }catch(e){ toast(e.message||e,false); } }
+function sponsorOpts(sel){ var h=''; for(var i=0;i<SPONSORS.length;i++){ var s=SPONSORS[i]; h+='<option value="'+esc(s.id)+'"'+(s.id===sel?' selected':'')+'>'+esc(s.name)+(s.active?'':' (inactive)')+'</option>'; } return h; }
+function renderPerks(){
+  var sh='<h2>Sponsors & Perks</h2><h3>Sponsors</h3><table><tr><th>Name</th><th>Active</th><th></th></tr>';
+  for(var i=0;i<SPONSORS.length;i++){ var s=SPONSORS[i]; sh+='<tr><td>'+esc(s.name)+'</td><td>'+pill(s.active)+'</td><td><button class="editSp" data-i="'+i+'">Edit</button></td></tr>'; }
+  sh+='</table><div class="form" style="margin-top:10px">'+fld("sp_id","id (blank = new)")+fld("sp_name","name")+fld("sp_logo","logo url")+selActive("sp_active")+'<div><button class="p" id="saveSp">Save sponsor</button></div></div>';
+  var ph='<h3>Perks</h3><table><tr><th>Title</th><th>Sponsor</th><th>Tier</th><th class="n">Coins</th><th>Country</th><th class="n">Stock</th><th>Active</th><th class="n">Claims</th><th></th></tr>';
+  for(var k=0;k<PERKS.length;k++){ var p=PERKS[k]; ph+='<tr><td>'+esc(p.title)+'</td><td>'+esc(p.sponsor)+'</td><td>'+esc(p.min_tier)+'</td><td class="n">'+money(p.coin_cost)+'</td><td>'+esc(p.country||"")+'</td><td class="n">'+(p.stock==null?"&#8734;":money(p.stock))+'</td><td>'+pill(p.active)+'</td><td class="n">'+money(p.claims)+'</td><td><button class="editPk" data-i="'+k+'">Edit</button></td></tr>'; }
+  ph+='</table><h3>Add / edit perk</h3><div class="form">'+
+    '<div><label>id (blank = new)</label><input id="pe_id"></div>'+
+    '<div><label>sponsor</label><select id="pe_sp">'+sponsorOpts("")+'</select></div>'+
+    fld("pe_title","title")+fld("pe_desc","description")+
+    '<div><label>kind</label><input id="pe_kind" placeholder="voucher / discount"></div>'+
+    '<div><label>min tier</label><select id="pe_tier"><option>none</option><option>silver</option><option>platinum</option><option>ultimate</option></select></div>'+
+    fld("pe_coins","coin cost (0=free)","number")+fld("pe_country","country (blank=all)")+fld("pe_stock","stock (blank=unlimited)","number")+fld("pe_sort","sort","number")+selActive("pe_active")+
+    '<div><button class="p" id="savePk">Save perk</button></div></div>';
+  $("tab-perks").innerHTML='<div class="card">'+sh+'</div><div class="card">'+ph+'</div>';
+  $("saveSp").addEventListener("click", async function(){ try{ await rpc("admin_sponsor_upsert",{p_id:val("sp_id")||null,p_name:val("sp_name"),p_logo_url:val("sp_logo"),p_active:val("sp_active")==="true"}); toast("Sponsor saved"); loadPerks(); }catch(e){ toast(e.message||e,false); } });
+  $("savePk").addEventListener("click", async function(){ try{ var stock=val("pe_stock")===""?null:num("pe_stock"); await rpc("admin_perk_upsert",{p_id:val("pe_id")||null,p_sponsor_id:val("pe_sp")||null,p_title:val("pe_title"),p_description:val("pe_desc"),p_kind:val("pe_kind"),p_min_tier:val("pe_tier"),p_coin_cost:num("pe_coins"),p_country:val("pe_country")||null,p_stock:stock,p_active:val("pe_active")==="true",p_sort:num("pe_sort")}); toast("Perk saved"); loadPerks(); }catch(e){ toast(e.message||e,false); } });
+  var es=$("tab-perks").querySelectorAll(".editSp"); for(var a=0;a<es.length;a++){ es[a].addEventListener("click",function(){ var s=SPONSORS[+this.getAttribute("data-i")]; set("sp_id",s.id);set("sp_name",s.name);set("sp_logo",s.logo_url||"");set("sp_active",String(s.active)); }); }
+  var ep=$("tab-perks").querySelectorAll(".editPk"); for(var b=0;b<ep.length;b++){ ep[b].addEventListener("click",function(){ var p=PERKS[+this.getAttribute("data-i")]; set("pe_id",p.id);set("pe_sp",p.sponsor_id||"");set("pe_title",p.title);set("pe_kind",p.kind||"");set("pe_tier",p.min_tier||"none");set("pe_coins",p.coin_cost||0);set("pe_country",p.country||"");set("pe_stock",p.stock==null?"":p.stock);set("pe_active",String(p.active)); }); } }
+
+/* ---------- settings ---------- */
+var SET_KEYS=["coin_aed_rate","margin_min_pct","margin_target_pct","payout_reserve_pct","vat_pct","pay_fee_pct","daily_coins_base","daily_coins_streak","daily_coins_streak_cap","sila_attribution_days","pitch_disclaimer_version"];
+async function loadSettings(){ try{ var r=await sb.from("app_settings").select("key,value"); var map={}; (r.data||[]).forEach(function(x){ map[x.key]=x.value; }); var h='<h2>Settings</h2><p class="mut">Economy configuration. Changes apply immediately to pricing, coins, and the SILA window.</p><table><tr><th>Key</th><th>Value</th><th></th></tr>';
+  for(var i=0;i<SET_KEYS.length;i++){ var k=SET_KEYS[i]; h+='<tr><td class="mut">'+k+'</td><td><input id="st_'+k+'" value="'+esc(map[k]==null?"":map[k])+'"></td><td><button class="saveSet" data-k="'+k+'">Save</button></td></tr>'; }
+  h+='</table>'; $("tab-settings").innerHTML='<div class="card">'+h+'</div>';
+  var bs=$("tab-settings").querySelectorAll(".saveSet"); for(var j=0;j<bs.length;j++){ bs[j].addEventListener("click", async function(){ var k=this.getAttribute("data-k"); try{ await rpc("admin_set_setting",{p_key:k,p_value:$("st_"+k).value}); toast("Saved "+k); }catch(e){ toast(e.message||e,false); } }); } }catch(e){ toast(e.message||e,false); } }
+
+/* ---------- tiny helpers ---------- */
+function fld(id,label,type){ return '<div><label>'+label+'</label><input id="'+id+'" type="'+(type||"text")+'"></div>'; }
+function selActive(id){ return '<div><label>active</label><select id="'+id+'"><option value="true">active</option><option value="false">inactive</option></select></div>'; }
+function pill(on){ return on?'<span class="pill on">active</span>':'<span class="pill off">inactive</span>'; }
+function val(id){ var e=$(id); return e?e.value.trim():""; }
+function num(id){ var e=$(id); return e&&e.value!==""?Number(e.value):0; }
+function set(id,v){ var e=$(id); if(e) e.value=(v==null?"":v); }
+
+boot();
+</script></body></html>
