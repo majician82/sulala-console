@@ -17,7 +17,7 @@ main{padding:18px;max-width:1100px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
 .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}
 .kpi .v{font-size:24px;font-weight:700;font-family:var(--mono)}.kpi .l{color:var(--mut);font-size:12px;margin-top:4px}
-table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border);vertical-align:top}
 th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
 td.n,th.n{text-align:right;font-family:var(--mono)}
 input,select{font:inherit;padding:7px 9px;border:1px solid var(--border);border-radius:8px;width:100%}
@@ -55,6 +55,8 @@ h2{font-size:16px;margin:0 0 12px}h3{font-size:13px;color:var(--mut);margin:18px
     <section id="tab-packs" hidden></section>
     <section id="tab-vgoods" hidden></section>
     <section id="tab-perks" hidden></section>
+    <section id="tab-ads" hidden></section>
+    <section id="tab-market" hidden></section>
     <section id="tab-settings" hidden></section>
   </main>
 </div>
@@ -68,14 +70,14 @@ function esc(s){ if(s===null||s===undefined) return ""; return String(s).replace
 function money(n){ n=Number(n||0); return n.toLocaleString(undefined,{maximumFractionDigits:2}); }
 function toast(m, ok){ var t=$("toast"); t.textContent=m; t.className=(ok===false?"toast err show":"toast show"); setTimeout(function(){ t.className="toast"; }, 3200); }
 async function rpc(name,args){ var r=await sb.rpc(name,args||{}); if(r.error) throw r.error; return r.data; }
-var TABS=[["overview","Overview"],["margin","Plans & Margin"],["packs","Coin Packs"],["vgoods","Virtual Goods"],["perks","Sponsors & Perks"],["settings","Settings"]];
+var TABS=[["overview","Overview"],["margin","Plans & Margin"],["packs","Coin Packs"],["vgoods","Virtual Goods"],["perks","Sponsors & Perks"],["ads","Ads review"],["market","Market review"],["settings","Settings"]];
 var SPONSORS=[], PACKS=[], VGOODS=[], PERKS=[];
 
 function buildNav(){ var h=""; for(var i=0;i<TABS.length;i++){ h+='<button class="tab" data-t="'+TABS[i][0]+'">'+TABS[i][1]+'</button>'; } $("nav").innerHTML=h;
   var bs=$("nav").querySelectorAll("button"); for(var j=0;j<bs.length;j++){ bs[j].addEventListener("click",function(){ show(this.getAttribute("data-t")); }); } }
 function show(t){ for(var i=0;i<TABS.length;i++){ var sec=$("tab-"+TABS[i][0]); if(sec) sec.hidden=(TABS[i][0]!==t); }
   var bs=$("nav").querySelectorAll("button"); for(var j=0;j<bs.length;j++){ bs[j].className="tab"+(bs[j].getAttribute("data-t")===t?" on":""); }
-  if(t==="overview") loadOverview(); else if(t==="margin") loadMargin(); else if(t==="packs") loadPacks(); else if(t==="vgoods") loadVgoods(); else if(t==="perks") loadPerks(); else if(t==="settings") loadSettings(); }
+  if(t==="overview") loadOverview(); else if(t==="margin") loadMargin(); else if(t==="packs") loadPacks(); else if(t==="vgoods") loadVgoods(); else if(t==="perks") loadPerks(); else if(t==="ads") loadAds(); else if(t==="market") loadMarket(); else if(t==="settings") loadSettings(); }
 
 /* ---------- auth ---------- */
 async function boot(){ var s=await sb.auth.getSession(); if(s.data.session){ enter(); } else { $("login").hidden=false; $("app").hidden=true; } }
@@ -173,6 +175,35 @@ function renderPerks(){
   $("savePk").addEventListener("click", async function(){ try{ var stock=val("pe_stock")===""?null:num("pe_stock"); await rpc("admin_perk_upsert",{p_id:val("pe_id")||null,p_sponsor_id:val("pe_sp")||null,p_title:val("pe_title"),p_description:val("pe_desc"),p_kind:val("pe_kind"),p_min_tier:val("pe_tier"),p_coin_cost:num("pe_coins"),p_country:val("pe_country")||null,p_stock:stock,p_active:val("pe_active")==="true",p_sort:num("pe_sort")}); toast("Perk saved"); loadPerks(); }catch(e){ toast(e.message||e,false); } });
   var es=$("tab-perks").querySelectorAll(".editSp"); for(var a=0;a<es.length;a++){ es[a].addEventListener("click",function(){ var s=SPONSORS[+this.getAttribute("data-i")]; set("sp_id",s.id);set("sp_name",s.name);set("sp_logo",s.logo_url||"");set("sp_active",String(s.active)); }); }
   var ep=$("tab-perks").querySelectorAll(".editPk"); for(var b=0;b<ep.length;b++){ ep[b].addEventListener("click",function(){ var p=PERKS[+this.getAttribute("data-i")]; set("pe_id",p.id);set("pe_sp",p.sponsor_id||"");set("pe_title",p.title);set("pe_kind",p.kind||"");set("pe_tier",p.min_tier||"none");set("pe_coins",p.coin_cost||0);set("pe_country",p.country||"");set("pe_stock",p.stock==null?"":p.stock);set("pe_active",String(p.active)); }); } }
+
+/* ---------- ADS review + rate card ---------- */
+async function loadAds(){ try{ renderAds(await rpc("admin_ad_queue")||[]); }catch(e){ toast(e.message||e,false); } }
+function renderAds(rows){ var h='<h2>Ads review</h2><p class="mut">Submitted ads land here. Nothing goes live until you approve it.</p>';
+  if(!rows.length){ h+='<p class="mut">No ads waiting for review.</p>'; }
+  else { h+='<table><tr><th>Headline</th><th>Placement</th><th>Country</th><th>Buy</th><th class="n">Budget</th><th class="n">CPM</th><th>Status</th><th></th></tr>';
+    for(var i=0;i<rows.length;i++){ var r=rows[i]; h+='<tr><td>'+esc(r.headline)+'<div class="mut" style="font-size:11px">'+esc(r.body||"")+'</div></td>'+
+      '<td>'+esc(r.placement)+'</td><td>'+esc(r.target_country||"all")+'</td><td>'+esc(r.buy_type)+'</td>'+
+      '<td class="n">'+money(r.budget_aed)+'</td><td class="n">'+money(r.quoted_cpm)+'</td><td>'+esc(r.status)+'</td>'+
+      '<td><button class="p adAppr" data-id="'+esc(r.id)+'">Approve &amp; live</button> <button class="adRej" data-id="'+esc(r.id)+'">Reject</button></td></tr>'; }
+    h+='</table>'; }
+  h+='<h3>Per-country rate card</h3><div class="form"><div><label>placement</label><select id="rc_pl"><option>hero</option><option>feed</option><option>store_banner</option><option>world_banner</option></select></div><div><button id="rcLoad">Show rate card</button></div></div><div id="rc_out" style="margin-top:10px"></div>';
+  $("tab-ads").innerHTML='<div class="card">'+h+'</div>';
+  var ap=$("tab-ads").querySelectorAll(".adAppr"); for(var a=0;a<ap.length;a++){ ap[a].addEventListener("click", async function(){ try{ await rpc("admin_ad_set_status",{p_id:this.getAttribute("data-id"),p_status:"live"}); toast("Ad is live"); loadAds(); }catch(e){ toast(e.message||e,false);} }); }
+  var rj=$("tab-ads").querySelectorAll(".adRej"); for(var b=0;b<rj.length;b++){ rj[b].addEventListener("click", async function(){ try{ await rpc("admin_ad_set_status",{p_id:this.getAttribute("data-id"),p_status:"rejected",p_reason:"not approved"}); toast("Ad rejected"); loadAds(); }catch(e){ toast(e.message||e,false);} }); }
+  $("rcLoad").addEventListener("click", async function(){ try{ var rc=await rpc("ad_geo_preview",{p_placement:val("rc_pl")})||[]; var t='<table><tr><th>Country</th><th>Tier</th><th class="n">PPP</th><th class="n">Visits 30d</th><th class="n">CPM (AED)</th></tr>'; for(var i=0;i<rc.length;i++){ var x=rc[i]; t+='<tr><td>'+esc(x.country_code)+'</td><td>'+esc(x.income_tier)+'</td><td class="n">'+money(x.ppp_mult)+'</td><td class="n">'+money(x.visits_30d)+'</td><td class="n">'+money(x.price_cpm)+'</td></tr>'; } t+='</table>'; $("rc_out").innerHTML=t; }catch(e){ toast(e.message||e,false);} }); }
+
+/* ---------- MARKET review ---------- */
+async function loadMarket(){ try{ renderMarket(await rpc("admin_marketplace_queue")||[]); }catch(e){ toast(e.message||e,false); } }
+function renderMarket(rows){ var h='<h2>Marketplace review</h2><p class="mut">New items wait here. Approve to make them public; reject to hide. Flagged = a user insisted after a failed check.</p>';
+  if(!rows.length){ h+='<p class="mut">Nothing waiting for review.</p>'; }
+  else { h+='<table><tr><th>Item</th><th>Category</th><th class="n">Price AED</th><th>Status</th><th>Reason</th><th></th></tr>';
+    for(var i=0;i<rows.length;i++){ var r=rows[i]; h+='<tr><td>'+esc(r.label)+'<div class="mut" style="font-size:11px">'+esc(r.description||"")+'</div></td>'+
+      '<td>'+esc(r.category||"")+'</td><td class="n">'+money(r.price_aed)+'</td><td>'+esc(r.status)+'</td><td class="mut">'+esc(r.review_reason||"")+'</td>'+
+      '<td><button class="p mpAppr" data-id="'+esc(r.id)+'">Approve</button> <button class="mpRej" data-id="'+esc(r.id)+'">Reject</button></td></tr>'; }
+    h+='</table>'; }
+  $("tab-market").innerHTML='<div class="card">'+h+'</div>';
+  var ap=$("tab-market").querySelectorAll(".mpAppr"); for(var a=0;a<ap.length;a++){ ap[a].addEventListener("click", async function(){ try{ await rpc("admin_marketplace_set_status",{p_id:this.getAttribute("data-id"),p_status:"approved"}); toast("Approved"); loadMarket(); }catch(e){ toast(e.message||e,false);} }); }
+  var rj=$("tab-market").querySelectorAll(".mpRej"); for(var b=0;b<rj.length;b++){ rj[b].addEventListener("click", async function(){ try{ await rpc("admin_marketplace_set_status",{p_id:this.getAttribute("data-id"),p_status:"rejected",p_reason:"not approved"}); toast("Rejected"); loadMarket(); }catch(e){ toast(e.message||e,false);} }); } }
 
 /* ---------- settings ---------- */
 var SET_KEYS=["coin_aed_rate","margin_min_pct","margin_target_pct","payout_reserve_pct","vat_pct","pay_fee_pct","daily_coins_base","daily_coins_streak","daily_coins_streak_cap","sila_attribution_days","pitch_disclaimer_version"];
