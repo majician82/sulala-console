@@ -31,6 +31,7 @@ h2{font-size:16px;margin:0 0 12px}h3{font-size:13px;color:var(--mut);margin:18px
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;opacity:0;transition:.25s;font-size:14px;z-index:9}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}.toast.err{background:var(--red)}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:#eef0f3}.pill.on{background:#dff3e4;color:var(--ok)}.pill.off{background:#fde7ea;color:var(--red)}
+.ragdot{display:inline-block;width:11px;height:11px;border-radius:50%}
 .hint{font-size:12px;color:var(--mut);margin-top:6px}
 </style></head><body>
 
@@ -51,6 +52,7 @@ h2{font-size:16px;margin:0 0 12px}h3{font-size:13px;color:var(--mut);margin:18px
   <nav id="nav"></nav>
   <main>
     <section id="tab-overview"></section>
+    <section id="tab-purchases" hidden></section>
     <section id="tab-margin" hidden></section>
     <section id="tab-packs" hidden></section>
     <section id="tab-vgoods" hidden></section>
@@ -70,14 +72,14 @@ function esc(s){ if(s===null||s===undefined) return ""; return String(s).replace
 function money(n){ n=Number(n||0); return n.toLocaleString(undefined,{maximumFractionDigits:2}); }
 function toast(m, ok){ var t=$("toast"); t.textContent=m; t.className=(ok===false?"toast err show":"toast show"); setTimeout(function(){ t.className="toast"; }, 3200); }
 async function rpc(name,args){ var r=await sb.rpc(name,args||{}); if(r.error) throw r.error; return r.data; }
-var TABS=[["overview","Overview"],["margin","Plans & Margin"],["packs","Coin Packs"],["vgoods","Virtual Goods"],["perks","Sponsors & Perks"],["ads","Ads review"],["market","Market review"],["settings","Settings"]];
+var TABS=[["overview","Overview"],["purchases","Revenue Integrity"],["margin","Plans & Margin"],["packs","Coin Packs"],["vgoods","Virtual Goods"],["perks","Sponsors & Perks"],["ads","Ads review"],["market","Market review"],["settings","Settings"]];
 var SPONSORS=[], PACKS=[], VGOODS=[], PERKS=[];
 
 function buildNav(){ var h=""; for(var i=0;i<TABS.length;i++){ h+='<button class="tab" data-t="'+TABS[i][0]+'">'+TABS[i][1]+'</button>'; } $("nav").innerHTML=h;
   var bs=$("nav").querySelectorAll("button"); for(var j=0;j<bs.length;j++){ bs[j].addEventListener("click",function(){ show(this.getAttribute("data-t")); }); } }
 function show(t){ for(var i=0;i<TABS.length;i++){ var sec=$("tab-"+TABS[i][0]); if(sec) sec.hidden=(TABS[i][0]!==t); }
   var bs=$("nav").querySelectorAll("button"); for(var j=0;j<bs.length;j++){ bs[j].className="tab"+(bs[j].getAttribute("data-t")===t?" on":""); }
-  if(t==="overview") loadOverview(); else if(t==="margin") loadMargin(); else if(t==="packs") loadPacks(); else if(t==="vgoods") loadVgoods(); else if(t==="perks") loadPerks(); else if(t==="ads") loadAds(); else if(t==="market") loadMarket(); else if(t==="settings") loadSettings(); }
+  if(t==="overview") loadOverview(); else if(t==="purchases") loadPurchases(); else if(t==="margin") loadMargin(); else if(t==="packs") loadPacks(); else if(t==="vgoods") loadVgoods(); else if(t==="perks") loadPerks(); else if(t==="ads") loadAds(); else if(t==="market") loadMarket(); else if(t==="settings") loadSettings(); }
 
 /* ---------- auth ---------- */
 async function boot(){ var s=await sb.auth.getSession(); if(s.data.session){ enter(); } else { $("login").hidden=false; $("app").hidden=true; } }
@@ -108,6 +110,44 @@ function renderOverview(o){ o=o||{}; var ver=o.verification||{}, si=o.sila||{}, 
   h+=kpi((mg.min_pct||"")+"%","Min margin")+kpi((mg.target_pct||"")+"%","Target margin")+kpi((mg.payout_reserve_pct||"")+"%","Payout reserve")+kpi((mg.sila_window_days||"")+"d","SILA window");
   h+='</div>';
   $("tab-overview").innerHTML='<div class="card">'+h+'</div>'; }
+
+/* ---------- REVENUE INTEGRITY (purchase analytics + RAG) ---------- */
+function ragDot(rag){ var c = rag==='red'?'#B5482E':(rag==='amber'?'#C49A4A':'#1B5E3F'); return '<span class="ragdot" style="background:'+c+'" title="'+esc(rag)+'"></span>'; }
+async function loadPurchases(){ try{
+  var d = await rpc("purchase_analytics");
+  if(!d || d.ok===false){ $("tab-purchases").innerHTML='<div class="card"><h2>Revenue Integrity</h2><p class="mut">Sign in as a super-admin to view purchase analytics.</p></div>'; return; }
+  var att=[]; try{ att = await rpc("admin_paid_not_active")||[]; }catch(e){ att=[]; }
+  renderPurchases(d, att);
+}catch(e){ toast(e.message||e,false); } }
+function renderPurchases(d, att){
+  var s=d.summary||{}, plans=d.plans||[], items=d.items||[];
+  var amber=function(n){ return Number(n)>0?'<span style="color:#C49A4A">'+money(n)+'</span>':money(n); };
+  var h='<div class="card"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">Revenue Integrity</h2><span style="flex:1"></span><small class="mut">'+esc((d.generated_at||"").replace("T"," ").substring(0,19))+'</small> <button id="purgeRefresh">Refresh</button></div>';
+  h+='<div class="grid" style="margin-top:12px">';
+  h+=kpi("AED "+money(s.plan_revenue_aed),"Plan revenue");
+  h+=kpi("AED "+money(s.item_revenue_aed),"Marketplace revenue");
+  h+=kpi(amber(s.paid_not_active),"Paid, not active");
+  h+=kpi(amber(s.pending_payments),"Pending payments");
+  h+='</div></div>';
+  h+='<div class="card"><h3>Plans</h3><table><tr><th>Plan</th><th class="n">Paid</th><th class="n">Revenue AED</th><th class="n">Pending</th><th class="n">Failed</th><th class="n">Buyers</th><th class="n">Double-buys</th><th>RAG</th></tr>';
+  for(var i=0;i<plans.length;i++){ var p=plans[i]; var hl=p.rag==='red'?' style="background:#fdecea"':(p.rag==='amber'?' style="background:#fbf3e3"':''); h+='<tr'+hl+'><td>'+esc(p.plan)+'</td><td class="n">'+money(p.paid_count)+'</td><td class="n">'+money(p.revenue_aed)+'</td><td class="n">'+money(p.pending_count)+'</td><td class="n">'+money(p.failed_count)+'</td><td class="n">'+money(p.buyers)+'</td><td class="n">'+money(p.double_buyers)+'</td><td>'+ragDot(p.rag)+'</td></tr>'; }
+  h+='</table></div>';
+  h+='<div class="card"><h3>Marketplace items</h3>';
+  if(!items.length){ h+='<p class="mut">No marketplace sales yet.</p>'; }
+  else { h+='<table><tr><th>Item</th><th class="n">Sold</th><th class="n">Revenue AED</th><th class="n">Buyers</th><th class="n">Payout pending</th><th class="n">Double-buys</th><th>RAG</th></tr>';
+    for(var j=0;j<items.length;j++){ var it=items[j]; var hl2=it.rag==='red'?' style="background:#fdecea"':(it.rag==='amber'?' style="background:#fbf3e3"':''); h+='<tr'+hl2+'><td>'+esc(it.item)+'</td><td class="n">'+money(it.sold)+'</td><td class="n">'+money(it.revenue_aed)+'</td><td class="n">'+money(it.buyers)+'</td><td class="n">'+money(it.payout_pending)+'</td><td class="n">'+money(it.double_buyers)+'</td><td>'+ragDot(it.rag)+'</td></tr>'; }
+    h+='</table>'; }
+  h+='</div>';
+  h+='<div class="card"><h3>Needs attention &mdash; paid but not active</h3>';
+  if(!att.length){ h+='<p class="mut">None. All paid accounts are active.</p>'; }
+  else { h+='<p class="mut">These payments succeeded but the plan is not active. Activate applies the plan in-app &mdash; no cash moves (cash refunds are done in Ziina).</p><table><tr><th>Buyer</th><th>Plan</th><th class="n">AED</th><th>When</th><th></th></tr>';
+    for(var k=0;k<att.length;k++){ var a=att[k]; h+='<tr><td>'+esc(a.full_name||a.email||"")+'<div class="mut" style="font-size:11px">'+esc(a.email||"")+'</div></td><td>'+esc(a.plan)+'</td><td class="n">'+money(a.amount_aed)+'</td><td class="mut">'+esc((a.created_at||"").substring(0,10))+'</td><td><button class="p actv" data-id="'+esc(a.payment_id)+'">Activate</button></td></tr>'; }
+    h+='</table>'; }
+  h+='</div>';
+  $("tab-purchases").innerHTML=h;
+  $("purgeRefresh").addEventListener("click", loadPurchases);
+  var bs=$("tab-purchases").querySelectorAll(".actv"); for(var x=0;x<bs.length;x++){ bs[x].addEventListener("click", async function(){ var id=this.getAttribute("data-id"); this.disabled=true; try{ await rpc("admin_activate_from_payment",{p_payment:id}); toast("Activated"); loadPurchases(); }catch(e){ toast(e.message||e,false); this.disabled=false; } }); }
+}
 
 /* ---------- margin / plan cost + create offering ---------- */
 async function loadMargin(){ try{ var rows=await rpc("admin_margin_table"); renderMargin(rows||[]); }catch(e){ toast(e.message||e,false); } }
